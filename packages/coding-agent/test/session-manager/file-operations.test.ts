@@ -206,3 +206,26 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
 		expect(sm2.getHeader()?.type).toBe("session");
 	});
 });
+
+describe("SessionManager.create with custom session ID", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = join(tmpdir(), `session-test-${Date.now()}`);
+		mkdirSync(tempDir, { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("creates a new session with the provided ID in header and filename", () => {
+		const sessionId = "feature-auth";
+		const sm = SessionManager.create(process.cwd(), tempDir);
+		sm.newSession({ id: sessionId });
+
+		expect(sm.getSessionId()).toBe(sessionId);
+		expect(sm.getHeader()?.id).toBe(sessionId);
+		expect(sm.getSessionFile()).toContain(`_${sessionId}.jsonl`);
+	});
+});
