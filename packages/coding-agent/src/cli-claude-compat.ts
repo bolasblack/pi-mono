@@ -734,6 +734,11 @@ async function runCompatCli(args: CompatArgs): Promise<void> {
 	const settingsManager = SettingsManager.create(cwd, agentDir);
 	const resourceOverrides = await applySettingsOverrides(settingsManager, args.settings);
 
+	// Claude Code env var: DISABLE_AUTO_COMPACT disables automatic context compaction
+	if (process.env.DISABLE_AUTO_COMPACT) {
+		settingsManager.applyOverrides({ compaction: { enabled: false } });
+	}
+
 	const authStorage = AuthStorage.create();
 	const modelRegistry = new ModelRegistry(authStorage);
 	const { systemPrompt, appendSystemPrompt } = await resolvePromptOptions(args);
