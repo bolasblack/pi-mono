@@ -124,6 +124,7 @@ interface CompatArgs {
 	settings?: string;
 	systemPrompt?: string;
 	systemPromptFile?: string;
+	forkSession: boolean;
 	messages: string[];
 	warnings: string[];
 }
@@ -142,6 +143,7 @@ type SupportedFlagName =
 	| "--settings"
 	| "--system-prompt"
 	| "--system-prompt-file"
+	| "--fork-session"
 	| "--version";
 
 interface SupportedFlagDefinition {
@@ -175,6 +177,7 @@ const SUPPORTED_FLAG_DEFINITIONS: readonly SupportedFlagDefinition[] = [
 	},
 	{ name: "--continue", short: "-c", valueMode: "none", helpLabel: "--continue, -c" },
 	{ name: "--model", valueMode: "required", helpLabel: "--model <id>" },
+	{ name: "--fork-session", valueMode: "none", helpLabel: "--fork-session" },
 	{ name: "--print", short: "-p", valueMode: "none", helpLabel: "--print" },
 	{ name: "--resume", short: "-r", valueMode: "optional", helpLabel: "--resume [id|name]" },
 	{ name: "--session-id", valueMode: "required", helpLabel: "--session-id <uuid>" },
@@ -199,7 +202,6 @@ const UNSUPPORTED_FLAG_DEFINITIONS: readonly UnsupportedFlagDefinition[] = [
 	{ name: "--disallowedTools", takesValue: true },
 	{ name: "--email", takesValue: true },
 	{ name: "--fallback-model", takesValue: true },
-	{ name: "--fork-session", takesValue: false },
 	{ name: "--from-pr", takesValue: true },
 	{ name: "--ide", takesValue: false },
 	{ name: "--include-partial-messages", takesValue: false },
@@ -244,6 +246,7 @@ const UNSUPPORTED_FLAG_BY_NAME = new Map(
 function createCompatArgs(): CompatArgs {
 	return {
 		continueLast: false,
+		forkSession: false,
 		print: false,
 		resumePicker: false,
 		messages: [],
@@ -320,6 +323,9 @@ function applySupportedFlag(args: CompatArgs, parsedFlag: ParsedFlag): void {
 		case "--model":
 			args.model = parsedFlag.value;
 			return;
+		case "--fork-session":
+			args.forkSession = true;
+			return;
 		case "--print":
 			args.print = true;
 			return;
@@ -395,6 +401,9 @@ function parseArgs(argv: string[]): CompatArgs {
 }
 
 function validateArgs(args: CompatArgs): void {
+	if (args.forkSession && !args.continueLast && !args.resumeTarget && !args.resumePicker) {
+		throw new Error("--fork-session requires --continue or --resume");
+	}
 	if (args.sessionId && (args.continueLast || args.resumePicker || args.resumeTarget)) {
 		throw new Error("--session-id cannot be combined with --continue or --resume");
 	}
@@ -492,6 +501,15 @@ function findResumeMatch(sessions: SessionInfo[], target: string): SessionInfo |
 	}
 	if (exactNameMatches.length > 1) {
 		throw new Error(`Multiple sessions share the name: ${target}`);
+	}
+
+	const prefixMatches = sessions.filter((session) => session.id.startsWith(target));
+	if (prefixMatches.length === 1) {
+		return prefixMatches[0];
+	}
+	if (prefixMatches.length > 1) {
+		const ids = prefixMatches.map((s) => s.id).join(", ");
+		throw new Error(`Multiple sessions match prefix "${target}": ${ids}`);
 	}
 
 	return undefined;
@@ -678,6 +696,9 @@ async function resolveSessionManager(
 		if (!match) {
 			throw new Error(`No session found for --resume ${args.resumeTarget}`);
 		}
+		if (args.forkSession) {
+			return SessionManager.forkFrom(match.path, cwd);
+		}
 		return SessionManager.open(match.path);
 	}
 
@@ -687,10 +708,20 @@ async function resolveSessionManager(
 		if (!selectedPath) {
 			process.exit(0);
 		}
+		if (args.forkSession) {
+			return SessionManager.forkFrom(selectedPath, cwd);
+		}
 		return SessionManager.open(selectedPath);
 	}
 
 	if (args.continueLast) {
+		if (args.forkSession) {
+			const sessions = await SessionManager.list(cwd);
+			if (sessions.length === 0) {
+				throw new Error("No sessions found to fork");
+			}
+			return SessionManager.forkFrom(sessions[0].path, cwd);
+		}
 		return SessionManager.continueRecent(cwd);
 	}
 
