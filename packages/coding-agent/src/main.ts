@@ -516,6 +516,15 @@ async function createSessionManager(
 		effectiveSessionDir = await callSessionDirectoryHook(extensions, cwd);
 	}
 
+	if (parsed.fork) {
+		const resolved = await resolveSessionPath(parsed.fork, cwd, effectiveSessionDir);
+		if (resolved.type === "not_found") {
+			console.error(chalk.red(`No session found matching '${resolved.arg}'`));
+			process.exit(1);
+		}
+		return SessionManager.forkFrom(resolved.path, cwd, effectiveSessionDir);
+	}
+
 	if (parsed.session) {
 		if (parsed.sessionMode) {
 			return createSessionFromId(parsed.session, parsed.sessionMode, cwd, effectiveSessionDir);

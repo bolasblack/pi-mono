@@ -24,6 +24,7 @@ export interface Args {
 	mode?: Mode;
 	noSession?: boolean;
 	session?: string;
+	fork?: string;
 	sessionMode?: SessionMode;
 	sessionDir?: string;
 	models?: string[];
@@ -89,6 +90,8 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.appendSystemPrompt = args[++i];
 		} else if (arg === "--no-session") {
 			result.noSession = true;
+		} else if (arg === "--fork" && i + 1 < args.length) {
+			result.fork = args[++i];
 		} else if (arg === "--session" && i + 1 < args.length) {
 			result.session = args[++i];
 		} else if (arg === "--session-mode" && i + 1 < args.length) {
@@ -212,6 +215,7 @@ ${chalk.bold("Options:")}
   --print, -p                    Non-interactive mode: process prompt and exit
   --continue, -c                 Continue previous session
   --resume, -r                   Select a session to resume
+  --fork <session-id|path>       Fork an existing session into a new session
   --session <path|id>            Use specific session file or session ID
   --session-mode <mode>           Session ID behavior: continue | create | auto
                                  continue: open existing, error if not found
