@@ -41,6 +41,7 @@ export interface Args {
 	themes?: string[];
 	noThemes?: boolean;
 	listModels?: string | true;
+	settings?: string[];
 	offline?: boolean;
 	verbose?: boolean;
 	messages: string[];
@@ -92,8 +93,6 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.noSession = true;
 		} else if (arg === "--session" && i + 1 < args.length) {
 			result.session = args[++i];
-		} else if (arg === "--fork" && i + 1 < args.length) {
-			result.fork = args[++i];
 		} else if (arg === "--session-mode" && i + 1 < args.length) {
 			const mode = args[++i];
 			if (mode === "continue" || mode === "create" || mode === "auto") {
@@ -164,6 +163,9 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			} else {
 				result.listModels = true;
 			}
+		} else if (arg === "--settings" && i + 1 < args.length) {
+			result.settings = result.settings ?? [];
+			result.settings.push(args[++i]);
 		} else if (arg === "--verbose") {
 			result.verbose = true;
 		} else if (arg === "--offline") {
@@ -239,6 +241,7 @@ ${chalk.bold("Options:")}
   --no-themes                    Disable theme discovery and loading
   --export <file>                Export session file to HTML and exit
   --list-models [search]         List available models (with optional fuzzy search)
+  --settings <path|json>         Apply settings overrides from a JSON file or inline JSON string
   --verbose                      Force verbose startup (overrides quietStartup setting)
   --offline                      Disable startup network operations (same as PI_OFFLINE=1)
   --help, -h                     Show this help

@@ -7,7 +7,7 @@
 
 import { type ImageContent, modelsAreEqual, supportsXhigh } from "@mariozechner/pi-ai";
 import chalk from "chalk";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { createInterface } from "readline";
 import { type Args, parseArgs, printHelp, type SessionMode } from "./cli/args.js";
 import { selectConfig } from "./cli/config-selector.js";
@@ -226,7 +226,11 @@ async function handlePackageCommand(args: string[]): Promise<boolean> {
 	const agentDir = getAgentDir();
 	const settingsManager = SettingsManager.create(cwd, agentDir);
 	reportSettingsErrors(settingsManager, "package command");
-	const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
+	const packageManager = new DefaultPackageManager({
+		cwd,
+		agentDir,
+		settingsManager,
+	});
 
 	packageManager.setProgressCallback((event) => {
 		if (event.type === "start") {
@@ -244,7 +248,9 @@ async function handlePackageCommand(args: string[]): Promise<boolean> {
 
 			case "remove": {
 				await packageManager.remove(source!, { local: options.local });
-				const removed = packageManager.removeSourceFromSettings(source!, { local: options.local });
+				const removed = packageManager.removeSourceFromSettings(source!, {
+					local: options.local,
+				});
 				if (!removed) {
 					console.error(chalk.red(`No matching package found for ${source}`));
 					process.exitCode = 1;
@@ -698,7 +704,11 @@ async function handleConfigCommand(args: string[]): Promise<boolean> {
 	const agentDir = getAgentDir();
 	const settingsManager = SettingsManager.create(cwd, agentDir);
 	reportSettingsErrors(settingsManager, "config command");
-	const packageManager = new DefaultPackageManager({ cwd, agentDir, settingsManager });
+	const packageManager = new DefaultPackageManager({
+		cwd,
+		agentDir,
+		settingsManager,
+	});
 
 	const resolvedPaths = await packageManager.resolve();
 
@@ -745,6 +755,23 @@ export async function main(args: string[]) {
 	const agentDir = getAgentDir();
 	const settingsManager = SettingsManager.create(cwd, agentDir);
 	reportSettingsErrors(settingsManager, "startup");
+
+	// Apply --settings overrides (JSON string or file path, may be repeated)
+	for (const entry of firstPass.settings ?? []) {
+		let content = entry;
+		if (existsSync(content)) {
+			content = readFileSync(content, "utf-8");
+		}
+		try {
+			const overrides = JSON.parse(content);
+			if (overrides && typeof overrides === "object" && !Array.isArray(overrides)) {
+				settingsManager.applyOverrides(overrides);
+			}
+		} catch {
+			console.error(chalk.yellow("Warning: --settings must be valid JSON or a path to a JSON file"));
+		}
+	}
+
 	const authStorage = AuthStorage.create();
 	const modelRegistry = ModelRegistry.create(authStorage, getModelsPath());
 

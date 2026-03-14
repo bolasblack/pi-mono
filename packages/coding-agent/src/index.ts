@@ -1,5 +1,7 @@
 // Core session management
 
+// CLI args
+export type { Args } from "./cli/args.js";
 // Config paths
 export { getAgentDir, VERSION } from "./config.js";
 export {
