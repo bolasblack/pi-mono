@@ -35,3 +35,8 @@ out.html
 packages/coding-agent/binaries/
 todo.md
 plans/
+
+# alca
+.alca/
+.alca*.local.toml
+.alca.mounts/
