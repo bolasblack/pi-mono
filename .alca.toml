@@ -1,0 +1,54 @@
+# llms.txt: https://bolasblack.github.io/alcatraz/llms.txt
+#:schema https://raw.githubusercontent.com/bolasblack/alcatraz/refs/heads/master/alca-config.schema.json
+
+includes = ['./.alca.*.toml']
+image = 'debian:bookworm-slim'
+
+workdir_exclude = [
+  '.env',
+  'node_modules',
+]
+
+mounts = [
+  '.alca.mounts/mise:/root/.local/share/mise',
+  '.alca.mounts/extra-bin:/extra-bin',
+  '.alca.mounts/extra-scripts:/extra-scripts',
+]
+
+[commands]
+# prepare the environment
+up = """
+apt update -y && \
+apt install -y curl && \
+install -dm 755 /etc/apt/keyrings && \
+curl -fSs https://mise.jdx.dev/gpg-key.pub | tee /etc/apt/keyrings/mise-archive-keyring.asc 1> /dev/null && \
+echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.asc] https://mise.jdx.dev/deb stable main" | tee /etc/apt/sources.list.d/mise.list && \
+apt update -y && 
+apt install -y mise
+
+# mise for nodejs
+apt install -y libatomic1
+
+# other tools
+apt install -y vim tmux git make
+
+echo '
+export PATH="/root/.local/share/mise/shims:$PATH"
+export PATH="/extra-bin:$PATH"
+' >> ~/.profile
+. ~/.profile
+
+[ -x /extra-scripts/source.sh ] && . /extra-scripts/source.sh
+
+mise trust -a
+mise install
+
+[ -x /extra-scripts/init.sh ] && /extra-scripts/init.sh
+"""
+enter = """
+[ -x /extra-scripts/source.sh ] && . /extra-scripts/source.sh
+. ~/.profile
+"""
+
+[envs]
+IS_SANDBOX = '1'

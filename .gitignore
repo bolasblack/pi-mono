@@ -39,3 +39,8 @@ plans/
 .pi/hf-sessions/
 .pi/hf-sessions-backup/
 collect.sh
+
+# alca
+.alca/
+.alca*.local.toml
+.alca.mounts/
