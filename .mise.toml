@@ -1,0 +1,7 @@
+[tools]
+node = "lts"
+"npm:pnpm" = "latest"
+"npm:@biomejs/biome" = "latest"
+
+[settings.pipx]
+uvx = true
