@@ -1,0 +1,19 @@
+{
+  "name": "@mariozechner/pi-kernel-cljs",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "files": [
+    "src",
+    "deps.edn",
+    "dist"
+  ],
+  "devDependencies": {
+    "shadow-cljs": "^2.28.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@mariozechner/pi-ai": "file:../ai",
+    "@mariozechner/pi-tui": "file:../tui"
+  }
+}

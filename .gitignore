@@ -40,3 +40,9 @@ plans/
 .alca/
 .alca*.local.toml
 .alca.mounts/
+
+# clj
+.lsp/.cache
+.clj-kondo/.cache
+.shadow-cljs
+packages/*-cljs/out

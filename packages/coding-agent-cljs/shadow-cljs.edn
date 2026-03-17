@@ -1,0 +1,22 @@
+{:source-paths ["src" "test"
+                "../kernel-cljs/src" "../kernel-cljs/test"]
+ :dependencies [[datascript/datascript "1.7.3"]
+                [org.clojure/core.async "1.6.681"]
+
+                [metosin/malli "0.16.4"]]
+ :builds {:app {:target :esm
+                :output-dir "out"
+                :modules {:coding-agent {:init-fn pi.coding-agent.core/main
+                                         :prepend "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url); import { fileURLToPath } from 'node:url'; import { dirname } from 'node:path'; const __filename = fileURLToPath(import.meta.url); const __dirname = dirname(__filename);\n"}}
+                :compiler-options {:optimizations :simple}
+                :js-options {:js-provider :import}}
+          :test {:target :node-test
+                 :output-to "out/test.js"
+                 :ns-regexp "pi\\.coding-agent\\..*-test$"
+                 :autorun true}
+          :test-esm {:target :esm
+                     :output-dir "out/test-esm"
+                     :modules {:test {:init-fn pi.coding-agent.test-runner/main
+                                      :prepend "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url); import { fileURLToPath } from 'node:url'; import { dirname } from 'node:path'; const __filename = fileURLToPath(import.meta.url); const __dirname = dirname(__filename);\n"}}
+                     :compiler-options {:optimizations :simple}
+                     :js-options {:js-provider :import}}}}

@@ -20,7 +20,8 @@
 		"./hooks": {
 			"types": "./dist/core/hooks/index.d.ts",
 			"import": "./dist/core/hooks/index.js"
-		}
+		},
+		"./dist/*": "./dist/*"
 	},
 	"files": [
 		"dist",
