@@ -1,0 +1,14 @@
+{:linters
+ {:unresolved-symbol
+  {:level :warning}}
+
+ :hooks
+ {:analyze-call
+  {pi.kernel.deftool/deftool hooks.deftool/deftool}}
+
+ ;; Suppress unresolved symbol errors for namespace-as-value pattern
+ :config-in-ns
+ {pi.coding-agent.components.custom-message
+  {:linters {:unresolved-symbol {:exclude [theme]}}}
+  pi.coding-agent.components.session-selector
+  {:linters {:unresolved-symbol {:exclude [load-scope!]}}}}}

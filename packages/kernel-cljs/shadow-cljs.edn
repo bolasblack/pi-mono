@@ -1,0 +1,14 @@
+{:source-paths ["src" "test"]
+ :dependencies [[datascript/datascript "1.7.3"]
+                [org.clojure/core.async "1.6.681"]
+
+                [metosin/malli "0.16.4"]]
+ :builds {:test {:target :node-test
+                 :output-to "out/test.cjs"
+                 :ns-regexp "pi\\.kernel\\..*-test$"
+                 :autorun true}
+          :test-esm {:target :esm
+                     :output-dir "out/test-esm"
+                     :modules {:test {:init-fn pi.kernel.test-runner/main
+                                      :prepend "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url); import { fileURLToPath } from 'node:url'; import { dirname } from 'node:path'; const __filename = fileURLToPath(import.meta.url); const __dirname = dirname(__filename);\n"}}
+                     :js-options {:js-provider :import}}}}

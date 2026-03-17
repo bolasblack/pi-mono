@@ -1,0 +1,236 @@
+(ns pi.coding-agent.test-runner
+  "ESM test runner. Calls deftest functions directly since :simple optimization
+   strips ^:test metadata, making run-tests/run-all-tests find 0 tests."
+  (:require [cljs.test :as t]
+            [pi.coding-agent.event-convert-test :as ec-test]
+            [pi.coding-agent.session-sync-test :as ss-test]
+            [pi.coding-agent.session-facade-test :as facade-t]
+            [pi.coding-agent.session-resolution-test :as sr-test]
+            [pi.coding-agent.cli-test :as cli-t]
+            [pi.coding-agent.startup-test :as startup-t]
+            [pi.coding-agent.facade-pure-test :as fp-test]
+            [pi.coding-agent.session-options-test :as so-test]
+            [pi.coding-agent.mode-dispatch-test :as md-test]))
+
+(defn- run-sync-test [test-fn name]
+  (t/inc-report-counter! :test)
+  (try
+    (test-fn)
+    (catch :default e
+      (t/do-report {:type :error :message name :actual e}))))
+
+(defn- run-all [tests]
+  (let [env (t/get-current-env)]
+    (doseq [[name test-fn] tests]
+      (run-sync-test test-fn name))
+    env))
+
+(defn main []
+  (let [pass (atom 0)
+        fail (atom 0)
+        error (atom 0)
+        original-pass (get-method t/report [:cljs.test/default :pass])
+        original-fail (get-method t/report [:cljs.test/default :fail])
+        original-error (get-method t/report [:cljs.test/default :error])]
+
+    (defmethod t/report [:cljs.test/default :pass] [m]
+      (swap! pass inc)
+      (print "."))
+    (defmethod t/report [:cljs.test/default :fail] [m]
+      (swap! fail inc)
+      (println)
+      (println "FAIL:" (:message m))
+      (println "  expected:" (pr-str (:expected m)))
+      (println "  actual:" (pr-str (:actual m))))
+    (defmethod t/report [:cljs.test/default :error] [m]
+      (swap! error inc)
+      (println)
+      (println "ERROR:" (:message m))
+      (println "  " (:actual m)))
+
+    ;; Enumerate all test functions explicitly
+    (println "Testing pi.coding-agent.event-convert-test")
+    (ec-test/agent-start-conversion-test)
+    (ec-test/agent-end-conversion-test)
+    (ec-test/message-start-conversion-test)
+    (ec-test/message-update-conversion-test)
+    (ec-test/message-end-conversion-test)
+    (ec-test/tool-execution-start-conversion-test)
+    (ec-test/tool-execution-update-conversion-test)
+    (ec-test/tool-execution-end-conversion-test)
+    (ec-test/tool-execution-end-error-conversion-test)
+    (ec-test/auto-retry-start-conversion-test)
+    (ec-test/auto-compaction-end-conversion-test)
+    (ec-test/unknown-event-returns-nil-test)
+    (ec-test/tool-call-content-block-test)
+    ;; New pure map-building tests
+    (ec-test/message-usage-fields-test)
+    (ec-test/message-without-usage-test)
+    (ec-test/message-error-fields-test)
+    (ec-test/thinking-content-block-test)
+    (ec-test/nil-message-returns-nil-in-turn-end-test)
+    (ec-test/build-content-block-map-test)
+    (ec-test/build-message-map-test)
+
+    (println)
+    (println "Testing pi.coding-agent.session-sync-test")
+    (ss-test/project-empty-session-test)
+    (ss-test/project-user-message-test)
+    (ss-test/project-assistant-message-test)
+    (ss-test/project-assistant-thinking-text-tools-test)
+    (ss-test/project-assistant-text-only-test)
+    (ss-test/project-tool-result-test)
+    (ss-test/populate-user-message-test)
+    (ss-test/populate-assistant-message-test)
+    (ss-test/populate-tool-result-test)
+    (ss-test/roundtrip-test)
+    (ss-test/build-user-message-map-test)
+    (ss-test/build-assistant-message-map-test)
+    (ss-test/build-assistant-text-only-map-test)
+    (ss-test/build-assistant-no-content-map-test)
+    (ss-test/build-tool-result-map-test)
+    (ss-test/build-tool-result-error-map-test)
+    (ss-test/build-unknown-entry-returns-nil-test)
+    (ss-test/build-assistant-content-blocks-test)
+
+    (println)
+    (println "Testing pi.coding-agent.session-facade-test")
+    (facade-t/facade-exposes-ts-properties-test)
+    (facade-t/facade-isStreaming-from-facade-state-test)
+    (facade-t/facade-retryAttempt-from-facade-state-test)
+    (facade-t/facade-state-messages-from-datascript-test)
+    (facade-t/facade-subscribe-test)
+    (facade-t/facade-internal-state-accessible-test)
+    (facade-t/facade-abort-test)
+    (facade-t/facade-new-session-resets-kernel-session-test)
+    (facade-t/facade-delegates-methods-test)
+    (facade-t/reset-kernel-session-creates-new-session-test)
+    (facade-t/reset-kernel-session-merges-extra-state-test)
+    (facade-t/reset-kernel-session-with-restore-test)
+
+    (println)
+    (println "Testing pi.coding-agent.session-resolution-test")
+    (sr-test/validate-fork-no-fork-test)
+    (sr-test/validate-fork-no-conflicts-test)
+    (sr-test/validate-fork-session-conflict-test)
+    (sr-test/validate-fork-continue-conflict-test)
+    (sr-test/validate-fork-resume-conflict-test)
+    (sr-test/validate-fork-no-session-conflict-test)
+    (sr-test/validate-fork-multiple-conflicts-test)
+    (sr-test/resolve-session-type-path-like-slash-test)
+    (sr-test/resolve-session-type-path-like-backslash-test)
+    (sr-test/resolve-session-type-path-like-jsonl-test)
+    (sr-test/resolve-session-type-id-test)
+    (sr-test/session-mode-dispatch-no-session-test)
+    (sr-test/session-mode-dispatch-session-with-create-test)
+    (sr-test/session-mode-dispatch-session-with-continue-mode-test)
+    (sr-test/session-mode-dispatch-session-with-auto-mode-test)
+    (sr-test/session-mode-dispatch-session-without-mode-test)
+    (sr-test/session-mode-dispatch-continue-test)
+    (sr-test/session-mode-dispatch-default-test)
+
+    (println)
+    (println "Testing pi.coding-agent.cli-test")
+    (cli-t/truthy-env-flag-test)
+    (cli-t/package-command-test)
+    (cli-t/parse-args-basic-flags-test)
+    (cli-t/parse-args-model-test)
+    (cli-t/parse-args-session-test)
+    (cli-t/parse-args-tools-test)
+    (cli-t/parse-args-thinking-test)
+    (cli-t/parse-args-mode-test)
+    (cli-t/parse-args-extensions-test)
+    (cli-t/parse-args-misc-test)
+    (cli-t/parse-args-messages-and-files-test)
+    (cli-t/parse-args-combined-test)
+
+    (println)
+    (println "Testing pi.coding-agent.startup-test")
+    (startup-t/tmux-keyboard-warning-test)
+    (startup-t/changelog-display-action-test)
+
+    (println)
+    (println "Testing pi.coding-agent.facade-pure-test")
+    (fp-test/retryable-error-overloaded-test)
+    (fp-test/retryable-error-rate-limit-test)
+    (fp-test/retryable-error-too-many-requests-test)
+    (fp-test/retryable-error-529-test)
+    (fp-test/retryable-error-503-test)
+    (fp-test/retryable-error-500-test)
+    (fp-test/retryable-error-capacity-test)
+    (fp-test/retryable-error-non-retryable-test)
+    (fp-test/retryable-error-nil-test)
+    (fp-test/retryable-error-non-string-test)
+    (fp-test/retry-delay-first-attempt-test)
+    (fp-test/retry-delay-second-attempt-test)
+    (fp-test/retry-delay-third-attempt-test)
+    (fp-test/retry-delay-caps-at-60s-test)
+    (fp-test/should-retry-retryable-under-max-test)
+    (fp-test/should-retry-at-max-retries-test)
+    (fp-test/should-retry-over-max-retries-test)
+    (fp-test/should-retry-non-retryable-test)
+    (fp-test/should-retry-disabled-test)
+    (fp-test/should-compact-over-threshold-test)
+    (fp-test/should-compact-under-threshold-test)
+    (fp-test/should-compact-at-threshold-test)
+    (fp-test/should-compact-disabled-test)
+    (fp-test/should-compact-nil-usage-test)
+    (fp-test/should-compact-custom-threshold-test)
+    ;; error->message tests
+    (fp-test/error->message-js-error-test)
+    (fp-test/error->message-string-test)
+    (fp-test/error->message-number-test)
+    (fp-test/error->message-nil-test)
+    ;; compaction-aborted? tests
+    (fp-test/compaction-aborted-cancelled-message-test)
+    (fp-test/compaction-aborted-abort-error-test)
+    (fp-test/compaction-aborted-other-error-test)
+    (fp-test/compaction-aborted-string-error-test)
+    (fp-test/compaction-aborted-string-non-match-test)
+
+    (println)
+    (println "Testing pi.coding-agent.session-options-test")
+    (so-test/select-scoped-model-returns-nil-when-model-already-set)
+    (so-test/select-scoped-model-returns-nil-when-no-scoped-models)
+    (so-test/select-scoped-model-returns-nil-when-continue)
+    (so-test/select-scoped-model-returns-nil-when-resume)
+    (so-test/select-scoped-model-uses-first-when-no-saved)
+    (so-test/select-scoped-model-uses-saved-when-in-scope)
+    (so-test/select-scoped-model-omits-thinking-when-cli-set)
+    (so-test/select-scoped-model-nil-thinking-level)
+    (so-test/resolve-tools-no-flags-returns-all)
+    (so-test/resolve-tools-no-tools-without-names-returns-none)
+    (so-test/resolve-tools-no-tools-empty-names-returns-none)
+    (so-test/resolve-tools-no-tools-with-names-returns-specific)
+    (so-test/resolve-tools-names-without-no-tools-returns-specific)
+    ;; New tests for resolve-model-and-thinking, build-options-map, options-map->js
+    (so-test/resolve-model-cli-takes-precedence)
+    (so-test/resolve-model-falls-back-to-scoped)
+    (so-test/resolve-model-explicit-thinking-overrides-all)
+    (so-test/resolve-model-nil-when-no-sources)
+    (so-test/resolve-model-explicit-thinking-with-scoped)
+    (so-test/resolve-model-nil-scoped-selection)
+    (so-test/build-options-map-includes-all-fields)
+    (so-test/build-options-map-omits-nil-fields)
+    (so-test/build-options-map-empty-when-all-nil)
+    (so-test/options-map->js-creates-js-object)
+    (so-test/options-map->js-preserves-js-values)
+    (so-test/options-map->js-empty-map)
+
+    (println)
+    (println "Testing pi.coding-agent.mode-dispatch-test")
+    (md-test/classify-rpc-mode-test)
+    (md-test/classify-interactive-no-flags-test)
+    (md-test/classify-print-flag-test)
+    (md-test/classify-stdin-content-test)
+    (md-test/classify-print-and-stdin-test)
+    (md-test/classify-text-mode-test)
+    (md-test/classify-json-mode-test)
+
+    (println)
+    (let [total (+ @pass @fail @error)]
+      (println (str "\nRan " total " assertions. "
+                    @pass " passed, "
+                    @fail " failed, "
+                    @error " errors."))
+      (.exit js/process (if (pos? (+ @fail @error)) 1 0)))))

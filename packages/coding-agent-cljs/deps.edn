@@ -1,0 +1,7 @@
+{:deps {org.clojure/clojurescript {:mvn/version "1.11.132"}
+        datascript/datascript {:mvn/version "1.7.3"}
+        org.clojure/core.async {:mvn/version "1.6.681"}
+        org.babashka/sci {:mvn/version "0.12.51"}
+        metosin/malli {:mvn/version "0.16.4"}}
+ :paths ["src" "test"
+         "../kernel-cljs/src" "../kernel-cljs/test"]}
