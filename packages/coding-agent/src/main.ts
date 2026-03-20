@@ -5,12 +5,12 @@
  * createAgentSession() options. The SDK does the heavy lifting.
  */
 
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
 import { ProcessTerminal, setKeybindings, TUI } from "@earendil-works/pi-tui";
 import chalk from "chalk";
-import { existsSync } from "node:fs";
 import { type Args, type Mode, parseArgs, printHelp, type SessionMode } from "./cli/args.js";
 import { processFileArguments } from "./cli/file-processor.js";
 import { buildInitialMessage } from "./cli/initial-message.js";
@@ -40,7 +40,7 @@ import {
 } from "./core/session-cwd.js";
 import { SessionManager } from "./core/session-manager.js";
 import { resolveSessionForMode } from "./core/session-resolver.js";
-import { SettingsManager } from "./core/settings-manager.js";
+import { type Settings, SettingsManager } from "./core/settings-manager.js";
 import { printTimings, resetTimings, time } from "./core/timings.js";
 import { runMigrations, showDeprecationWarnings } from "./migrations.js";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.js";
@@ -93,6 +93,39 @@ function reportDiagnostics(diagnostics: readonly AgentSessionRuntimeDiagnostic[]
 function isTruthyEnvFlag(value: string | undefined): boolean {
 	if (!value) return false;
 	return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
+}
+
+function parseCliSettingsEntry(entry: string, cwd: string): Partial<Settings> {
+	const trimmed = entry.trim();
+	const resolvedPath = resolve(cwd, entry);
+	const source = trimmed.startsWith("{")
+		? trimmed
+		: existsSync(resolvedPath)
+			? readFileSync(resolvedPath, "utf-8")
+			: entry;
+
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(source);
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (source === entry) {
+			throw new Error(
+				`Invalid --settings value "${entry}": expected inline JSON or an existing file path (${message})`,
+			);
+		}
+		throw new Error(`Failed to parse settings file "${resolvedPath}": ${message}`);
+	}
+
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error(`Invalid --settings value "${entry}": expected a JSON object`);
+	}
+
+	return parsed as Partial<Settings>;
+}
+
+export function parseCliSettingsEntries(entries: string[] | undefined, cwd: string): Partial<Settings>[] {
+	return (entries ?? []).map((entry) => parseCliSettingsEntry(entry, cwd));
 }
 
 type AppMode = "interactive" | "print" | "json" | "rpc";
@@ -517,7 +550,23 @@ export async function main(args: string[], options?: MainOptions) {
 
 	const cwd = process.cwd();
 	const agentDir = getAgentDir();
+
+	// Parse --settings entries exactly once: each entry may be inline JSON or a
+	// path to read from disk. Reusing the parsed payload across startup and
+	// every createRuntime() call avoids O(N files × 2) I/O at startup plus
+	// another round on every session switch / resume / fork / reload. It also
+	// ensures malformed files produce a single error message rather than two.
+	let parsedCliOverrides: Partial<Settings>[];
+	try {
+		parsedCliOverrides = parseCliSettingsEntries(parsed.settings, cwd);
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(chalk.red(`Error: ${message}`));
+		process.exit(1);
+	}
+
 	const startupSettingsManager = SettingsManager.create(cwd, agentDir);
+	startupSettingsManager.applyParsedOverrides(parsedCliOverrides);
 	reportDiagnostics(collectSettingsDiagnostics(startupSettingsManager, "startup session lookup"));
 
 	// Decide the final runtime cwd before creating cwd-bound runtime services.
@@ -557,10 +606,13 @@ export async function main(args: string[], options?: MainOptions) {
 		sessionManager,
 		sessionStartEvent,
 	}) => {
+		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir);
+		runtimeSettingsManager.applyParsedOverrides(parsedCliOverrides);
 		const services = await createAgentSessionServices({
 			cwd,
 			agentDir,
 			authStorage,
+			settingsManager: runtimeSettingsManager,
 			extensionFlagValues: parsed.unknownFlags,
 			resourceLoaderOptions: {
 				additionalExtensionPaths: resolvedExtensionPaths,

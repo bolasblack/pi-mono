@@ -45,6 +45,7 @@ export interface Args {
 	noThemes?: boolean;
 	noContextFiles?: boolean;
 	listModels?: string | true;
+	settings?: string[];
 	offline?: boolean;
 	verbose?: boolean;
 	messages: string[];
@@ -172,6 +173,9 @@ export function parseArgs(args: string[]): Args {
 			} else {
 				result.listModels = true;
 			}
+		} else if (arg === "--settings" && i + 1 < args.length) {
+			result.settings = result.settings ?? [];
+			result.settings.push(args[++i]);
 		} else if (arg === "--verbose") {
 			result.verbose = true;
 		} else if (arg === "--offline") {
@@ -263,6 +267,7 @@ ${chalk.bold("Options:")}
   --no-context-files, -nc        Disable AGENTS.md and CLAUDE.md discovery and loading
   --export <file>                Export session file to HTML and exit
   --list-models [search]         List available models (with optional fuzzy search)
+  --settings <path|json>         Apply settings overrides from a JSON file or inline JSON string
   --verbose                      Force verbose startup (overrides quietStartup setting)
   --offline                      Disable startup network operations (same as PI_OFFLINE=1)
   --help, -h                     Show this help
