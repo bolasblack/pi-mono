@@ -19,14 +19,7 @@ after pre-processing.
 
 ## Solution
 
-### main.ts: Add `--settings` support
-
-Add `settings?: string[]` to `Args` and handle it in main.ts after
-SettingsManager creation. Parses each entry as JSON string or file path,
-applies via `settingsManager.applyOverrides()` in order (later overrides win).
-Supports multiple `--settings` flags.
-
-### cli-claude-compat.ts: Thin translation layer
+cli-claude-compat.ts becomes a thin translation layer:
 
 1. Parses Claude Code flags
 2. Pre-processes compat-only features:
@@ -45,10 +38,10 @@ Supports multiple `--settings` flags.
 5. Passes unknown flags through (extension flags)
 6. Calls `main(argv)`
 
+Depends on `--settings` flag from spec 08.
+
 ## Files Changed
 
-- `packages/coding-agent/src/cli/args.ts` — add `settings` field + parsing + help
-- `packages/coding-agent/src/main.ts` — handle `parsed.settings` (~10 lines)
 - `packages/coding-agent/src/cli-claude-compat.ts` — replaced with thin wrapper
 
 ## Verification
@@ -59,4 +52,3 @@ Supports multiple `--settings` flags.
 4. Extension with `registerCliArgsTransformer(...)` → transformer applied
 5. `pi-claude --settings '{"compaction":{"enabled":false}}'` → compaction disabled
 6. `DISABLE_AUTO_COMPACT=1 pi-claude` → compaction disabled
-7. `pi --settings a.json --settings '{"theme":"dark"}'` → both applied, later wins

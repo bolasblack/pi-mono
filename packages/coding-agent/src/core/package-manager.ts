@@ -8,7 +8,7 @@ import { minimatch } from "minimatch";
 import { CONFIG_DIR_NAME } from "../config.js";
 import { type GitSource, parseGitUrl } from "../utils/git.js";
 import { isStdoutTakenOver } from "./output-guard.js";
-import type { PackageSource, SettingsManager } from "./settings-manager.js";
+import type { PackageSource, Settings, SettingsManager } from "./settings-manager.js";
 
 const NETWORK_TIMEOUT_MS = 10000;
 const UPDATE_CHECK_CONCURRENCY = 4;
@@ -776,6 +776,7 @@ export class DefaultPackageManager implements PackageManager {
 		const accumulator = this.createAccumulator();
 		const globalSettings = this.settingsManager.getGlobalSettings();
 		const projectSettings = this.settingsManager.getProjectSettings();
+		const cliSettings = this.settingsManager.getCliOverrideSettings();
 
 		// Collect all packages with scope (project first so cwd resources win collisions)
 		const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
@@ -784,6 +785,9 @@ export class DefaultPackageManager implements PackageManager {
 		}
 		for (const pkg of globalSettings.packages ?? []) {
 			allPackages.push({ pkg, scope: "user" });
+		}
+		for (const pkg of cliSettings.packages ?? []) {
+			allPackages.push({ pkg, scope: "temporary" });
 		}
 
 		// Dedupe: project scope wins over global for same package identity
@@ -797,6 +801,7 @@ export class DefaultPackageManager implements PackageManager {
 			const target = this.getTargetMap(accumulator, resourceType);
 			const globalEntries = (globalSettings[resourceType] ?? []) as string[];
 			const projectEntries = (projectSettings[resourceType] ?? []) as string[];
+			const cliEntries = (cliSettings[resourceType] ?? []) as string[];
 			this.resolveLocalEntries(
 				projectEntries,
 				resourceType,
@@ -819,9 +824,27 @@ export class DefaultPackageManager implements PackageManager {
 				},
 				globalBaseDir,
 			);
+			this.resolveLocalEntries(
+				cliEntries,
+				resourceType,
+				target,
+				{
+					source: "cli",
+					scope: "temporary",
+					origin: "top-level",
+				},
+				this.cwd,
+			);
 		}
 
-		this.addAutoDiscoveredResources(accumulator, globalSettings, projectSettings, globalBaseDir, projectBaseDir);
+		this.addAutoDiscoveredResources(
+			accumulator,
+			globalSettings,
+			projectSettings,
+			cliSettings,
+			globalBaseDir,
+			projectBaseDir,
+		);
 
 		return this.toResolvedPaths(accumulator);
 	}
@@ -1438,12 +1461,13 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	/**
-	 * Dedupe packages: if same package identity appears in both global and project,
-	 * keep only the project one (project wins).
+	 * Dedupe packages: if same package identity appears in multiple scopes,
+	 * keep the one with highest priority (temporary > project > user).
 	 */
 	private dedupePackages(
 		packages: Array<{ pkg: PackageSource; scope: SourceScope }>,
 	): Array<{ pkg: PackageSource; scope: SourceScope }> {
+		const scopePriority: Record<SourceScope, number> = { temporary: 2, project: 1, user: 0 };
 		const seen = new Map<string, { pkg: PackageSource; scope: SourceScope }>();
 
 		for (const entry of packages) {
@@ -1453,12 +1477,10 @@ export class DefaultPackageManager implements PackageManager {
 			const existing = seen.get(identity);
 			if (!existing) {
 				seen.set(identity, entry);
-			} else if (entry.scope === "project" && existing.scope === "user") {
-				// Project wins over user
+			} else if (scopePriority[entry.scope] > scopePriority[existing.scope]) {
 				seen.set(identity, entry);
 			}
-			// If existing is project and new is global, keep existing (project)
-			// If both are same scope, keep first one
+			// If same or lower priority, keep existing (first one wins within same scope)
 		}
 
 		return Array.from(seen.values());
@@ -1916,6 +1938,7 @@ export class DefaultPackageManager implements PackageManager {
 		accumulator: ResourceAccumulator,
 		globalSettings: ReturnType<SettingsManager["getGlobalSettings"]>,
 		projectSettings: ReturnType<SettingsManager["getProjectSettings"]>,
+		cliSettings: Partial<Settings>,
 		globalBaseDir: string,
 		projectBaseDir: string,
 	): void {
@@ -1932,17 +1955,24 @@ export class DefaultPackageManager implements PackageManager {
 			baseDir: projectBaseDir,
 		};
 
+		// CLI override patterns (e.g. !pattern, +path, -path) apply to auto-discovered resources
+		const cliOverridePatterns = {
+			extensions: getOverridePatterns((cliSettings.extensions ?? []) as string[]),
+			skills: getOverridePatterns((cliSettings.skills ?? []) as string[]),
+			prompts: getOverridePatterns((cliSettings.prompts ?? []) as string[]),
+			themes: getOverridePatterns((cliSettings.themes ?? []) as string[]),
+		};
 		const userOverrides = {
-			extensions: (globalSettings.extensions ?? []) as string[],
-			skills: (globalSettings.skills ?? []) as string[],
-			prompts: (globalSettings.prompts ?? []) as string[],
-			themes: (globalSettings.themes ?? []) as string[],
+			extensions: [...((globalSettings.extensions ?? []) as string[]), ...cliOverridePatterns.extensions],
+			skills: [...((globalSettings.skills ?? []) as string[]), ...cliOverridePatterns.skills],
+			prompts: [...((globalSettings.prompts ?? []) as string[]), ...cliOverridePatterns.prompts],
+			themes: [...((globalSettings.themes ?? []) as string[]), ...cliOverridePatterns.themes],
 		};
 		const projectOverrides = {
-			extensions: (projectSettings.extensions ?? []) as string[],
-			skills: (projectSettings.skills ?? []) as string[],
-			prompts: (projectSettings.prompts ?? []) as string[],
-			themes: (projectSettings.themes ?? []) as string[],
+			extensions: [...((projectSettings.extensions ?? []) as string[]), ...cliOverridePatterns.extensions],
+			skills: [...((projectSettings.skills ?? []) as string[]), ...cliOverridePatterns.skills],
+			prompts: [...((projectSettings.prompts ?? []) as string[]), ...cliOverridePatterns.prompts],
+			themes: [...((projectSettings.themes ?? []) as string[]), ...cliOverridePatterns.themes],
 		};
 
 		const userDirs = {

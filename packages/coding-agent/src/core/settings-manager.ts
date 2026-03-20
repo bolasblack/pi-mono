@@ -227,7 +227,7 @@ export class SettingsManager {
 	private storage: SettingsStorage;
 	private globalSettings: Settings;
 	private projectSettings: Settings;
-	private settings: Settings;
+	private settings: Settings = {};
 	private modifiedFields = new Set<keyof Settings>(); // Track global fields modified during session
 	private modifiedNestedFields = new Map<keyof Settings, Set<string>>(); // Track global nested field modifications
 	private modifiedProjectFields = new Set<keyof Settings>(); // Track project fields modified during session
@@ -236,6 +236,7 @@ export class SettingsManager {
 	private projectSettingsLoadError: Error | null = null; // Track if project settings file had parse errors
 	private writeQueue: Promise<void> = Promise.resolve();
 	private errors: SettingsError[];
+	private cliOverrides: Partial<Settings> = {};
 
 	private constructor(
 		storage: SettingsStorage,
@@ -251,7 +252,7 @@ export class SettingsManager {
 		this.globalSettingsLoadError = globalLoadError;
 		this.projectSettingsLoadError = projectLoadError;
 		this.errors = [...initialErrors];
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMergedSettings();
 	}
 
 	/** Create a SettingsManager that loads from files */
@@ -359,6 +360,17 @@ export class SettingsManager {
 		return structuredClone(this.projectSettings);
 	}
 
+	getCliOverrideSettings(): Partial<Settings> {
+		return structuredClone(this.cliOverrides);
+	}
+
+	private recomputeMergedSettings(): void {
+		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		if (Object.keys(this.cliOverrides).length > 0) {
+			this.settings = deepMergeSettings(this.settings, this.cliOverrides as Settings);
+		}
+	}
+
 	reload(): void {
 		const globalLoad = SettingsManager.tryLoadFromStorage(this.storage, "global");
 		if (!globalLoad.error) {
@@ -383,12 +395,13 @@ export class SettingsManager {
 			this.recordError("project", projectLoad.error);
 		}
 
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMergedSettings();
 	}
 
-	/** Apply additional overrides on top of current settings */
+	/** Apply additional overrides on top of current settings. These are preserved across reload(). */
 	applyOverrides(overrides: Partial<Settings>): void {
-		this.settings = deepMergeSettings(this.settings, overrides);
+		this.cliOverrides = deepMergeSettings(this.cliOverrides as Settings, overrides as Settings);
+		this.recomputeMergedSettings();
 	}
 
 	/** Mark a global field as modified during this session */
@@ -480,7 +493,7 @@ export class SettingsManager {
 	}
 
 	private save(): void {
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMergedSettings();
 
 		if (this.globalSettingsLoadError) {
 			return;
@@ -497,7 +510,7 @@ export class SettingsManager {
 
 	private saveProjectSettings(settings: Settings): void {
 		this.projectSettings = structuredClone(settings);
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMergedSettings();
 
 		if (this.projectSettingsLoadError) {
 			return;
