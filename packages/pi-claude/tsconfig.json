@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "esModuleInterop": false,
+    "types": ["node"]
+  },
+  "exclude": ["dist", "./src/**/*.test.ts"]
+}

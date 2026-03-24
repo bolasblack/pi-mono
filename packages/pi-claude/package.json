@@ -1,0 +1,51 @@
+{
+  "name": "@c4/pi-claude",
+  "version": "0.1.6",
+  "type": "module",
+  "bin": {
+    "pi-claude": "dist/index.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./ui-helpers": {
+      "types": "./dist/ui-helpers.d.mts",
+      "import": "./dist/ui-helpers.mjs"
+    },
+    "./claude-helpers": {
+      "types": "./dist/claude-helpers.d.mts",
+      "import": "./dist/claude-helpers.mjs"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extension.mjs"
+    ]
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "test": "bun test",
+    "build": "tsdown",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@earendil-works/pi-tui": ">=0.75.0",
+    "typebox": "^1.1.24",
+    "yaml": "^2.7.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.75.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "file:../coding-agent",
+    "@earendil-works/pi-tui": "file:../tui",
+    "@types/bun": "^1.3.11",
+    "@types/node": "^22.13.11",
+    "tsdown": "^0.21.4"
+  }
+}
