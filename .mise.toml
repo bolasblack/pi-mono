@@ -2,6 +2,7 @@
 node = "lts"
 "npm:pnpm" = "latest"
 "npm:@biomejs/biome" = "latest"
+bat = "latest"
 
 [settings.pipx]
 uvx = true

@@ -1,0 +1,49 @@
+{
+  "name": "@c4/pi-claude",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "pi-claude": "dist/index.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./ui-helpers": {
+      "types": "./dist/ui-helpers.d.mts",
+      "import": "./dist/ui-helpers.mjs"
+    },
+    "./claude-helpers": {
+      "types": "./dist/claude-helpers.d.mts",
+      "import": "./dist/claude-helpers.mjs"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extension.mjs"
+    ]
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "test": "bun test",
+    "build": "tsdown",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.41",
+    "yaml": "^2.7.0",
+    "@mariozechner/pi-coding-agent": ">=0.62.0",
+    "@mariozechner/pi-tui": ">=0.62.0"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "file:../coding-agent",
+    "@mariozechner/pi-tui": "file:../tui",
+    "@types/node": "^22.13.11",
+    "@types/bun": "^1.3.11",
+    "tsdown": "^0.21.4"
+  }
+}

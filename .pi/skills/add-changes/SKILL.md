@@ -51,3 +51,22 @@ Workflow for making changes to this pi-mono fork. Every change gets a spec befor
 - If the user provides a pre-written spec or a link to an issue, use that as the basis — still create the spec file.
 - If the change is trivial (typo, config tweak), the spec can be minimal but must still exist.
 - One spec per logical change. Don't bundle unrelated changes.
+
+## When to Skip the Spec
+
+If the change **only** affects packages that don't exist in the upstream repo, you may skip creating a spec file. Before skipping, always verify by checking whether the package directory exists upstream:
+
+```bash
+git ls-remote --exit-code origin refs/heads/main >/dev/null 2>&1 && \
+  git archive --remote=origin main -- <package-path> 2>/dev/null | tar t >/dev/null 2>&1 \
+  && echo "EXISTS upstream" || echo "NOT in upstream"
+```
+
+Or more practically, check the upstream repo's directory listing (e.g., via `gh api` or by reading the upstream's package.json/workspace config).
+
+Examples of packages that are typically fork-only and don't need specs:
+- `packages/kernel-cljs`
+- `packages/coding-agent-cljs`
+- `packages/pi-claude`
+
+**Do not hardcode this list** — always verify against upstream before deciding. Upstream may add new packages, or fork-only packages may get upstreamed.

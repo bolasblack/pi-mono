@@ -7,6 +7,7 @@ image = 'debian:bookworm-slim'
 workdir_exclude = [
   '.env',
   'node_modules',
+  '.alca.mounts',
 ]
 
 mounts = [
