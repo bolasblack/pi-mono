@@ -234,6 +234,20 @@ function parseFrontmatterHooks(content: string, skillName: string, skillDir: str
 /**
  * Run matching skill hooks for an event. Returns array of additionalContext strings.
  */
+/**
+ * Test whether a hook matcher pattern matches a tool name.
+ * Supports regex patterns (including alternation like "Bash|Write|Edit"),
+ * wildcard "*", and exact matches. Case-insensitive.
+ */
+export function matchesToolName(matcher: string, toolName: string): boolean {
+	try {
+		const pattern = matcher === "*" ? ".*" : matcher;
+		return new RegExp(`^(?:${pattern})$`, "i").test(toolName);
+	} catch {
+		return matcher.toLowerCase() === toolName.toLowerCase();
+	}
+}
+
 async function runSkillHooks(
 	hooks: SkillHookDefinition[],
 	event: string,
@@ -251,7 +265,7 @@ async function runSkillHooks(
 		// Only run hooks for activated skills
 		if (!activatedSkills.has(h.skillName)) return false;
 		if (isToolEvent && h.matcher && toolName) {
-			return h.matcher.toLowerCase() === toolName.toLowerCase();
+			return matchesToolName(h.matcher, toolName);
 		}
 		// If no matcher, matches all tools for that event
 		return true;
