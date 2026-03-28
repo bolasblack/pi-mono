@@ -15,7 +15,8 @@ describe("spawnHookCommand", () => {
 		);
 
 		const elapsed = Date.now() - start;
-		expect(result).toBeNull();
+		expect(result?.hookSpecificOutput?.additionalContext).toContain("⚠");
+		expect(result?.hookSpecificOutput?.additionalContext).toContain("timeout-test");
 		expect(elapsed).toBeLessThan(1500);
 	});
 

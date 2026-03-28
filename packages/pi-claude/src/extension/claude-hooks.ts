@@ -202,7 +202,12 @@ export function injectHookContext(pi: ExtensionAPI, additionalContext: string, h
 // =========================================================================
 
 /** Collapsed-line renderer: prefix + up to 80 visible chars + expand hint. */
-export function collapsedLine(prefix: string, content: string, theme: Theme): string {
+export function collapsedLine(
+	prefix: string,
+	content: string,
+	theme: Theme,
+	options?: { alwaysShowHint?: boolean },
+): string {
 	const MAX_CHARS = 80;
 	const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 	const flat = content.replace(/\n/g, " ");
@@ -210,7 +215,7 @@ export function collapsedLine(prefix: string, content: string, theme: Theme): st
 	const prefixPlain = stripAnsi(prefix);
 	const budget = MAX_CHARS - prefixPlain.length;
 	const truncated = budget > 0 && flatPlain.length > budget;
-	const needsHint = truncated || content.includes("\n");
+	const needsHint = options?.alwaysShowHint || truncated || content.includes("\n");
 	// Slice by visible character count, preserving ANSI escape sequences
 	let preview = "";
 	if (budget > 0) {
@@ -247,6 +252,32 @@ export function collapsedLine(prefix: string, content: string, theme: Theme): st
 // registerHookContextRenderer — register once at plugin init
 // =========================================================================
 
+/**
+ * Summarize hook status lines for collapsed view.
+ * Input lines like:
+ *   ✓ agent-centric/PostToolUse: `full command...`
+ *   ✗ agent-centric/PostToolUse: `full command...` — error
+ * Output: "✓ agent-centric[1], ✗ agent-centric[2]"
+ */
+function summarizeHookLines(content: string): string {
+	const statusRe = /^([✓✗⚠])\s+([^/:[\s]+)/;
+	const lines = content.split("\n").filter((l) => l.trim());
+	const items: string[] = [];
+	const counts = new Map<string, number>();
+
+	for (const line of lines) {
+		const m = statusRe.exec(line);
+		if (m) {
+			const [, status, name] = m;
+			const idx = (counts.get(name!) ?? 0) + 1;
+			counts.set(name!, idx);
+			items.push(`${status} ${name}[${idx}]`);
+		}
+	}
+
+	return items.length > 0 ? items.join(", ") : content;
+}
+
 export function registerHookContextRenderer(pi: ExtensionAPI): void {
 	pi.registerMessageRenderer("hook-context", (message, { expanded }, theme) => {
 		const hookEvent = (message.details as any)?.hookEvent || "Hook";
@@ -257,9 +288,10 @@ export function registerHookContextRenderer(pi: ExtensionAPI): void {
 
 		if (expanded) {
 			box.addChild(new Text(label, 0, 0));
-			box.addChild(new Text(theme.fg("customMessageText", content), 0, 0));
+			box.addChild(new Text(theme.fg("customMessageText", `\n${content}`), 0, 0));
 		} else {
-			box.addChild(new Text(collapsedLine(label, content, theme), 0, 0));
+			const summary = summarizeHookLines(content);
+			box.addChild(new Text(collapsedLine(label, summary, theme, { alwaysShowHint: true }), 0, 0));
 		}
 
 		return box;

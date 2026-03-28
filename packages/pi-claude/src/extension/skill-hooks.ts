@@ -2,13 +2,13 @@ import type { ExtensionAPI, SessionEntry } from "@mariozechner/pi-coding-agent";
 import { parseSkillBlock, SkillInvocationMessageComponent } from "@mariozechner/pi-coding-agent";
 import { Box } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { spawn } from "child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { parse as parseYaml } from "yaml";
 import type { Logger } from "./claude-hooks.js";
 import { type BaseHookParams, type ClaudeHookResult, registerClaudeHooks } from "./claude-hooks.js";
+import { spawnHookCommand } from "./hook-runner.js";
 import { runInParallelStable } from "./ordered-parallel.js";
 
 interface SkillHookDefinition {
@@ -282,79 +282,32 @@ async function runSkillHooks(
 }
 
 /**
- * Execute a single hook command, returning additionalContext if any.
+ * Execute a single skill hook command, returning additionalContext if any.
+ * Thin wrapper around spawnHookCommand from hook-runner.
  */
-function executeHookCommand(
+async function executeHookCommand(
 	hook: SkillHookDefinition,
 	input: any,
 	logger: Logger,
 	baseEnv: Record<string, string | undefined>,
 	timeoutMs: number,
 ): Promise<string | null> {
-	return new Promise((resolvePromise) => {
-		const childEnv: Record<string, string | undefined> = { ...baseEnv };
-		if (input?.project_dir) {
-			childEnv.CLAUDE_PROJECT_DIR = input.project_dir;
-		}
+	const childEnv: Record<string, string | undefined> = { ...baseEnv };
+	if (input?.project_dir) {
+		childEnv.CLAUDE_PROJECT_DIR = input.project_dir;
+	}
 
-		const child = spawn(hook.command, {
-			shell: true,
-			env: childEnv,
-			timeout: timeoutMs,
+	const label = `${hook.skillName}/${hook.event}`;
+	try {
+		const result = await spawnHookCommand(hook.command, [], input, childEnv, label, {
+			timeoutMs,
 			cwd: hook.skillDir,
 		});
-
-		let outputData = "";
-		let stderrData = "";
-
-		child.stdout.on("data", (chunk: Buffer) => {
-			outputData += chunk.toString();
-		});
-
-		child.stderr.on("data", (chunk: Buffer) => {
-			stderrData += chunk.toString();
-		});
-
-		child.on("close", (code) => {
-			if (code === null) {
-				// Killed by signal (e.g., timeout SIGTERM)
-				logger.logWarn(`Command killed by signal for ${hook.skillName}/${hook.event}: ${stderrData}`);
-				resolvePromise(null);
-				return;
-			}
-			if (code !== 0) {
-				logger.logError(`Command failed (code ${code}) for ${hook.skillName}/${hook.event}: ${stderrData}`);
-				resolvePromise(null);
-				return;
-			}
-
-			try {
-				const json = JSON.parse(outputData);
-				const ctx = json?.hookSpecificOutput?.additionalContext;
-				if (ctx && typeof ctx === "string" && ctx.trim() !== "") {
-					resolvePromise(ctx);
-				} else {
-					resolvePromise(null);
-				}
-			} catch {
-				// Output isn't valid JSON — not an error, just no context
-				resolvePromise(null);
-			}
-		});
-
-		child.on("error", (err) => {
-			logger.logError(`Spawn error for ${hook.skillName}/${hook.event}:`, err);
-			resolvePromise(null);
-		});
-
-		child.stdin.on("error", (err: NodeJS.ErrnoException) => {
-			if (err.code === "EPIPE" || err.code === "ERR_STREAM_DESTROYED") return;
-			logger.logError(`stdin error for ${hook.skillName}/${hook.event}:`, err);
-		});
-
-		child.stdin.write(JSON.stringify(input));
-		child.stdin.end();
-	});
+		return result?.hookSpecificOutput?.additionalContext ?? null;
+	} catch (err) {
+		logger.logError(`Error in ${label}:`, err);
+		return null;
+	}
 }
 
 // =========================================================================

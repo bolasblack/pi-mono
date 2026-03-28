@@ -166,7 +166,8 @@ describe("runSettingsHooks", () => {
 		const result = await runSettingsHooks(map, "PreToolUse", {}, {}, { timeoutMs: 100 });
 		const elapsed = Date.now() - start;
 
-		expect(result).toBeNull();
+		expect(result?.hookSpecificOutput?.additionalContext).toContain("⚠");
+		expect(result?.hookSpecificOutput?.additionalContext).toContain("timed out");
 		expect(elapsed).toBeLessThan(2000);
 	});
 
@@ -189,7 +190,7 @@ describe("runSettingsHooks", () => {
 		};
 
 		const result = await runSettingsHooks(map, "PreToolUse", {}, {}, { timeoutMs: 100 });
-		expect(result?.hookSpecificOutput?.additionalContext).toBe("fast");
+		expect(result?.hookSpecificOutput?.additionalContext).toContain("fast");
 	});
 
 	test("passes env to hook subprocess", async () => {

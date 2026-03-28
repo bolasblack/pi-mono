@@ -18,6 +18,7 @@ export interface HookOutput {
 
 export interface HookCommandOptions {
 	timeoutMs?: number;
+	cwd?: string;
 }
 
 const DEFAULT_HOOK_TIMEOUT_MS = 10_000;
@@ -92,10 +93,16 @@ export function spawnHookCommand(
 	options: HookCommandOptions = {},
 ): Promise<HookOutput | null> {
 	return new Promise((resolve) => {
-		const child = spawn(command, args, { shell: args.length === 0, env });
+		const child = spawn(command, args, {
+			shell: args.length === 0,
+			env,
+			cwd: options.cwd,
+		});
 
 		const timeoutMs = options.timeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS;
+		
 		let stdout = "";
+		let stderr = "";
 		let resolved = false;
 
 		const finish = (value: HookOutput | null) => {
@@ -108,26 +115,42 @@ export function spawnHookCommand(
 		const timeout = setTimeout(() => {
 			console.error(`[${label}] timed out after ${timeoutMs}ms`);
 			child.kill("SIGKILL");
-			finish(null);
+			finish({ hookSpecificOutput: { additionalContext: `⚠ ${label}: \`${command}\` — timed out` } });
 		}, timeoutMs);
 
 		child.stdout.on("data", (chunk: Buffer) => {
 			stdout += chunk.toString();
 		});
 
+		child.stderr.on("data", (chunk: Buffer) => {
+			stderr += chunk.toString();
+		});
+
 		child.on("close", (code) => {
 			if (resolved) return;
 			if (code === null) {
 				// Killed by signal (e.g., timeout SIGKILL) — already logged by timeout handler
-				finish(null);
+				finish({ hookSpecificOutput: { additionalContext: `⚠ ${label}: \`${command}\` — killed by signal` } });
 				return;
 			}
 			if (code !== 0) {
 				console.error(`[${label}] exited with code ${code}`);
-				finish(null);
+				const errMsg = stderr.trim().split("\n").pop() || `exit code ${code}`;
+				finish({ hookSpecificOutput: { additionalContext: `✗ ${label}: \`${command}\` — ${errMsg}` } });
 				return;
 			}
-			finish(parseHookOutputFromStdout(stdout));
+
+			const parsed = parseHookOutputFromStdout(stdout);
+			if (parsed) {
+				// Merge status into existing output if no additionalContext already
+				if (!parsed.hookSpecificOutput?.additionalContext) {
+					if (!parsed.hookSpecificOutput) parsed.hookSpecificOutput = {};
+					parsed.hookSpecificOutput.additionalContext = `✓ ${label}: \`${command}\``;
+				}
+				finish(parsed);
+			} else {
+				finish({ hookSpecificOutput: { additionalContext: `✓ ${label}: \`${command}\`` } });
+			}
 		});
 
 		child.on("error", (err) => {
