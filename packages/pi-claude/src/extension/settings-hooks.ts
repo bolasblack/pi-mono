@@ -174,7 +174,7 @@ export async function runSettingsHooks(
 		if (!Array.isArray(group.hooks)) continue;
 		for (const entry of group.hooks) {
 			if (entry.type !== "command" || !entry.command) continue;
-			promises.push(spawnHookCommand(entry.command, [], payload, env, `settings-hook ${eventName}`, { timeoutMs }));
+			promises.push(spawnHookCommand(entry.command, [], payload, env, `hooks/${eventName}`, { timeoutMs }));
 		}
 	}
 

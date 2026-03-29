@@ -1,6 +1,6 @@
 {
   "name": "@c4/pi-claude",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "bin": {
     "pi-claude": "dist/index.mjs"

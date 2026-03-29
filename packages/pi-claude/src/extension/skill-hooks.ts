@@ -297,7 +297,7 @@ async function executeHookCommand(
 		childEnv.CLAUDE_PROJECT_DIR = input.project_dir;
 	}
 
-	const label = `${hook.skillName}/${hook.event}`;
+	const label = `${hook.skillName}/hooks/${hook.event}`;
 	try {
 		const result = await spawnHookCommand(hook.command, [], input, childEnv, label, {
 			timeoutMs,

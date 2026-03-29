@@ -258,22 +258,24 @@ export function collapsedLine(
 /**
  * Summarize hook status lines for collapsed view.
  * Input lines like:
- *   ✓ agent-centric/PostToolUse: `full command...`
- *   ✗ agent-centric/PostToolUse: `full command...` — error
+ *   [agent-centric/hooks/PostToolUse] ✓ `full command...`
+ *   [hooks/PreToolUse] ✗ `full command...` — error
  * Output: "✓ agent-centric[1], ✗ agent-centric[2]"
  */
 function summarizeHookLines(content: string): string {
-	const statusRe = /^([✓✗⚠])\s+([^/:[\s]+)/;
+	const bracketRe = /^\[([^\]]+)\]\s+([✓✗⚠])/;
 	const lines = content.split("\n").filter((l) => l.trim());
 	const items: string[] = [];
 	const counts = new Map<string, number>();
 
 	for (const line of lines) {
-		const m = statusRe.exec(line);
+		const m = bracketRe.exec(line);
 		if (m) {
-			const [, status, name] = m;
-			const idx = (counts.get(name!) ?? 0) + 1;
-			counts.set(name!, idx);
+			const [, label, status] = m;
+			// Extract the first path component as the short name
+			const name = label!.split("/")[0]!;
+			const idx = (counts.get(name) ?? 0) + 1;
+			counts.set(name, idx);
 			items.push(`${status} ${name}[${idx}]`);
 		}
 	}
@@ -490,7 +492,7 @@ export function registerClaudeHooks(
 		// Collect buffered PreToolUse context
 		const pre = pendingPreToolContext.get(event.toolCallId);
 		if (pre) {
-			parts.push(`[PreToolUse] ${pre}`);
+			parts.push(pre);
 			pendingPreToolContext.delete(event.toolCallId);
 		}
 
@@ -499,7 +501,7 @@ export function registerClaudeHooks(
 			const result = await cb?.onPostToolUse?.(ctx, payload);
 			const post = result?.hookSpecificOutput?.additionalContext;
 			if (post && post.trim() !== "") {
-				parts.push(`[PostToolUse] ${post}`);
+				parts.push(post);
 			}
 		} catch (err) {
 			logger.logError("PostToolUse callback error:", err);

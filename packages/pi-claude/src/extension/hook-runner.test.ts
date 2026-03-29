@@ -36,7 +36,7 @@ describe("spawnHookCommand", () => {
 			{ timeoutMs: 1000 },
 		);
 
-		expect(result?.hookSpecificOutput?.additionalContext).toBe("ok");
+		expect(result?.hookSpecificOutput?.additionalContext).toBe("[multiline-json-test] ok");
 	});
 });
 

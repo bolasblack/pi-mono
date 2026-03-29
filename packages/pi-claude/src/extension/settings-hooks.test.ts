@@ -145,7 +145,7 @@ describe("runSettingsHooks", () => {
 			],
 		};
 		const result = await runSettingsHooks(map, "SessionStart", { session_id: "test" }, {});
-		expect(result?.hookSpecificOutput?.additionalContext).toBe("test-ctx");
+		expect(result?.hookSpecificOutput?.additionalContext).toBe("[hooks/SessionStart] test-ctx");
 	});
 
 	test("times out stalled hook commands", async () => {
