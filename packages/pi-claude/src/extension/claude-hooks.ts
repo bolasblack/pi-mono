@@ -6,6 +6,9 @@
  *
  * Has no knowledge of any project-specific daemon implementation.
  *
+ * Design: hook additionalContext piggybacks on existing triggers (user message,
+ * tool result) instead of injecting steering messages. See AGD-012.
+ *
  * This module provides:
  * 1. registerClaudeHooks(pi, logger, callbacks) — bidirectional translator.
  * 2. registerHookContextRenderer() — registers the hook-context message type.
@@ -302,23 +305,6 @@ export function registerHookContextRenderer(pi: ExtensionAPI): void {
 // Result translation helpers — Claude Code hook result → pi event result
 // =========================================================================
 
-/**
- * Translate Claude Code hook result for a hook event that produces additionalContext.
- * Handles context injection. Returns void (no pi-level action needed).
- */
-function handleAdditionalContext(
-	pi: ExtensionAPI,
-	result: ClaudeHookResult | undefined,
-	hookEvent: string,
-	display = true,
-): void {
-	if (!result) return;
-	const ctx = result.hookSpecificOutput?.additionalContext;
-	if (ctx && typeof ctx === "string" && ctx.trim() !== "") {
-		injectHookContext(pi, ctx, hookEvent, display);
-	}
-}
-
 // =========================================================================
 // registerClaudeHooks — bidirectional pi ↔ Claude Code hook translator
 // =========================================================================
@@ -362,7 +348,17 @@ export function registerClaudeHooks(
 		const params = hookPayload(sid, "SessionStart", { message }, getHookCwd(ctx)) as SessionStartParams;
 		try {
 			const result = await cb.onSessionStart?.(ctx, params);
-			handleAdditionalContext(pi, result, "SessionStart", false);
+			const additional = result?.hookSpecificOutput?.additionalContext;
+			if (additional && additional.trim() !== "") {
+				// AGD-012: appendMessage — no deliverAs, no triggerTurn.
+				// Context is seen by LLM when the user's first message triggers a turn.
+				pi.sendMessage({
+					customType: "hook-context",
+					content: `[Hook: SessionStart]\n${additional}`,
+					display: false,
+					details: { source: "pi-claude", hookEvent: "SessionStart" },
+				});
+			}
 		} catch (err) {
 			logger.logError("SessionStart callback error:", err);
 		}
@@ -400,7 +396,17 @@ export function registerClaudeHooks(
 					notify?.(result.stopReason || "Blocked by hook", "error");
 					return { action: "handled" as const };
 				}
-				handleAdditionalContext(pi, result, "UserPromptSubmit");
+				const additional = result.hookSpecificOutput?.additionalContext;
+				if (additional && additional.trim() !== "") {
+					// AGD-012: appendMessage — no deliverAs, no triggerTurn.
+					// Context appears before the user message that triggers the LLM turn.
+					pi.sendMessage({
+						customType: "hook-context",
+						content: `[Hook: UserPromptSubmit]\n${additional}`,
+						display: true,
+						details: { source: "pi-claude", hookEvent: "UserPromptSubmit" },
+					});
+				}
 			}
 		} catch (err) {
 			logger.logError("UserPromptSubmit callback error:", err);
@@ -412,8 +418,12 @@ export function registerClaudeHooks(
 	// Claude Code result → pi result:
 	//   { continue: false } → { block: true, reason }
 	//   { permissionDecision: "deny" } → { block: true, reason }
-	//   { additionalContext } → injectHookContext
+	//   { additionalContext } → buffered, flushed with PostToolUse into tool_result content
 	//
+
+	// AGD-012: Buffer PreToolUse additionalContext keyed by toolCallId.
+	// Flushed during the corresponding PostToolUse handler.
+	const pendingPreToolContext = new Map<string, string>();
 
 	listeners.add("tool_call", async (event, ctx) => {
 		if (!active) return;
@@ -443,7 +453,11 @@ export function registerClaudeHooks(
 					const reason = result.hookSpecificOutput?.permissionDecisionReason || result.reason || "Denied by hook";
 					return { block: true, reason };
 				}
-				handleAdditionalContext(pi, result, "PreToolUse");
+				// Buffer additionalContext for the corresponding tool_result
+				const additional = result.hookSpecificOutput?.additionalContext;
+				if (additional && additional.trim() !== "") {
+					pendingPreToolContext.set(event.toolCallId, additional);
+				}
 			}
 		} catch (err) {
 			logger.logError("PreToolUse callback error:", err);
@@ -451,6 +465,10 @@ export function registerClaudeHooks(
 	});
 
 	// -- PostToolUse (pi: "tool_result") -----------------------------------
+	//
+	// AGD-012: Flushes buffered PreToolUse context + own additionalContext
+	// by appending to the tool result content. No steering, no extra LLM turn.
+	//
 
 	listeners.add("tool_result", async (event, ctx) => {
 		if (!active) return;
@@ -466,11 +484,32 @@ export function registerClaudeHooks(
 			},
 			getHookCwd(ctx),
 		) as PostToolUseParams;
+
+		const parts: string[] = [];
+
+		// Collect buffered PreToolUse context
+		const pre = pendingPreToolContext.get(event.toolCallId);
+		if (pre) {
+			parts.push(`[PreToolUse] ${pre}`);
+			pendingPreToolContext.delete(event.toolCallId);
+		}
+
+		// Run PostToolUse hook
 		try {
 			const result = await cb?.onPostToolUse?.(ctx, payload);
-			handleAdditionalContext(pi, result, "PostToolUse");
+			const post = result?.hookSpecificOutput?.additionalContext;
+			if (post && post.trim() !== "") {
+				parts.push(`[PostToolUse] ${post}`);
+			}
 		} catch (err) {
 			logger.logError("PostToolUse callback error:", err);
+		}
+
+		// Append to tool result content — LLM sees context in the same turn
+		if (parts.length > 0) {
+			return {
+				content: [...event.content, { type: "text" as const, text: `\n${parts.join("\n")}` }],
+			};
 		}
 	});
 

@@ -100,7 +100,7 @@ export function spawnHookCommand(
 		});
 
 		const timeoutMs = options.timeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS;
-		
+
 		let stdout = "";
 		let stderr = "";
 		let resolved = false;

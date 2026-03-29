@@ -9,7 +9,8 @@
     "packaging",
     "persistence",
     "testing",
-    "kernel"
+    "kernel",
+    "extension"
   ],
   "disableAutoUpdateScripts": []
 }

@@ -14,3 +14,4 @@ decisions/AGD-008_red-green-tdd.md: #testing, #kernel
 decisions/AGD-009_pi-kernel-naming.md: #kernel, #packaging
 decisions/AGD-010_self-modification-auto-approve.md: #self-evolution, #kernel
 decisions/AGD-011_speculative-execution-deferred.md: #architecture, #kernel
+decisions/AGD-012_hook-context-piggyback.md: #architecture, #extension
