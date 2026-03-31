@@ -284,8 +284,8 @@ function summarizeHookLines(content: string): string {
 }
 
 export function registerHookContextRenderer(pi: ExtensionAPI): void {
-	pi.registerMessageRenderer("hook-context", (message, { expanded }, theme) => {
-		const hookEvent = (message.details as any)?.hookEvent || "Hook";
+	pi.registerMessageRenderer<{ hookEvent?: string }>("hook-context", (message, { expanded }, theme) => {
+		const hookEvent = message.details?.hookEvent || "Hook";
 		const label = theme.fg("dim", `⚙ [${hookEvent}]`);
 		const content = typeof message.content === "string" ? message.content.replace(/^\[Hook: [^\]]+\]\n/, "") : "";
 
@@ -326,7 +326,7 @@ export function registerClaudeHooks(
 	// -- Helpers -----------------------------------------------------------
 
 	function getSessionId(ctx: ExtensionContext): string | null {
-		return (ctx.sessionManager as any).getSessionId?.() || null;
+		return ctx.sessionManager.getSessionId?.() || null;
 	}
 
 	function getNotify(ctx: ExtensionContext): NotifyFn | null {

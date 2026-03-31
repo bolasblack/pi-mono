@@ -1,6 +1,9 @@
 /**
  * Typed listener registry that infers event/handler pairs from an API's `on()` overloads.
  *
+ * `add` has the exact same overloaded signature as `API["on"]`, so all event
+ * names and handler types are preserved. `dispose()` unbinds everything.
+ *
  * Usage with ExtensionAPI:
  *   const listeners = createListenerRegistry(pi);
  *   listeners.add("tool_result", async (event, ctx) => { ... });
@@ -10,25 +13,18 @@
 /** Any object with an overloaded `on()` method for event subscription. */
 export type EventEmitterLike = { on(...args: any): any };
 
-/** Extract the union of [event, handler] pairs from overloaded `on()`. */
-type OnParams<API extends EventEmitterLike> = Parameters<API["on"]>;
-
-/** Extract event name union from the API's `on()` overloads. */
-type EventName<API extends EventEmitterLike> = OnParams<API>[0];
-
-/** Extract the handler type for a specific event name. */
-type HandlerFor<API extends EventEmitterLike, E extends EventName<API>> = Extract<OnParams<API>, [E, any]>[1];
-
 export interface ListenerRegistry<API extends EventEmitterLike> {
-	add<E extends EventName<API>>(event: E, handler: HandlerFor<API, E>): void;
+	/** Register a listener. Same overloaded signature as `API["on"]`. */
+	add: API["on"];
+	/** Unbind all listeners registered via `add`. */
 	dispose(): void;
 }
 
 export function createListenerRegistry<API extends EventEmitterLike>(api: API): ListenerRegistry<API> {
 	const disposers: Array<() => void> = [];
 
-	const add = <E extends EventName<API>>(event: E, handler: HandlerFor<API, E>) => {
-		const maybeDisposer = (api as any).on(event, handler);
+	const add = (...args: any[]) => {
+		const maybeDisposer = api.on(...args);
 
 		if (typeof maybeDisposer === "function") {
 			disposers.push(maybeDisposer as () => void);
@@ -36,7 +32,7 @@ export function createListenerRegistry<API extends EventEmitterLike>(api: API): 
 		}
 
 		if (typeof (api as any).off === "function") {
-			disposers.push(() => (api as any).off(event, handler));
+			disposers.push(() => (api as any).off(...args));
 		}
 	};
 
@@ -51,5 +47,5 @@ export function createListenerRegistry<API extends EventEmitterLike>(api: API): 
 		}
 	};
 
-	return { add, dispose };
+	return { add: add as API["on"], dispose };
 }
