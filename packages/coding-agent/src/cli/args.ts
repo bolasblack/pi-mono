@@ -93,6 +93,8 @@ export function parseArgs(args: string[], extensionFlags?: Map<string, { type: "
 			result.noSession = true;
 		} else if (arg === "--session" && i + 1 < args.length) {
 			result.session = args[++i];
+		} else if (arg === "--fork" && i + 1 < args.length) {
+			result.fork = args[++i];
 		} else if (arg === "--session-mode" && i + 1 < args.length) {
 			const mode = args[++i];
 			if (mode === "continue" || mode === "create" || mode === "auto") {
