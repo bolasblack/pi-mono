@@ -318,7 +318,7 @@ export function registerClaudeHooks(
 ): { dispose: () => void } {
 	let cb: ClaudeHookCallbacks | null = callbacks ? { ...callbacks } : null;
 	let active = true;
-	const listeners = createListenerRegistry(pi as any);
+	const listeners = createListenerRegistry(pi);
 
 	// Stop hook loop guard — prevents infinite stop→continue→stop cycles
 	let stopHookActive = false;
