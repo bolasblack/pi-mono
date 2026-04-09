@@ -11,7 +11,7 @@ workdir_exclude = [
 ]
 
 mounts = [
-  '.alca.mounts/mise:/root/.local/share/mise',
+  '.alca.mounts/mise:/mise',
   '.alca.mounts/extra-bin:/extra-bin',
   '.alca.mounts/extra-scripts:/extra-scripts',
 ]
@@ -22,7 +22,7 @@ up = """
 apt install -y vim tmux
 
 echo '
-export PATH="/root/.local/share/mise/shims:$PATH"
+export PATH="/mise/shims:$PATH"
 export PATH="/extra-bin:$PATH"
 ' >> ~/.profile
 . ~/.profile

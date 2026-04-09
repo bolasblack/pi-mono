@@ -1,7 +1,7 @@
 [tools]
 node = "lts"
-"npm:pnpm" = "latest"
-"npm:@biomejs/biome" = "latest"
+pnpm = "latest"
+"npm:@biomejs/biome" = "2.3.5"
 bat = "latest"
 
 [settings.pipx]
