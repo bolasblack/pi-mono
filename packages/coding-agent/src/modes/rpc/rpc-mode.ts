@@ -20,6 +20,8 @@ import type {
 	WorkingIndicatorOptions,
 } from "../../core/extensions/index.js";
 import { takeOverStdout, writeRawStdout } from "../../core/output-guard.js";
+import type { SessionManager } from "../../core/session-manager.js";
+import { resolveSessionForMode } from "../../core/session-resolver.js";
 import { killTrackedDetachedChildren } from "../../utils/shell.js";
 import { type Theme, theme } from "../interactive/theme/theme.js";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.js";
@@ -416,6 +418,50 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			}
 
 			case "new_session": {
+				if (command.sessionId) {
+					const sessionId = command.sessionId;
+					const mode = command.sessionMode ?? "auto";
+					const cwd = session.sessionManager.getCwd();
+
+					const resolved = await resolveSessionForMode({
+						sessionId,
+						mode,
+						cwd,
+						sessionDir: undefined,
+					});
+
+					if (!resolved.ok) {
+						return error(id, "new_session", resolved.error.message);
+					}
+
+					if (resolved.action.type === "opened_existing") {
+						const result = await runtimeHost.switchSession(resolved.action.path);
+						if (!result.cancelled) {
+							await rebindSession();
+						}
+						return success(id, "new_session", {
+							cancelled: result.cancelled,
+							sessionId: resolved.action.sessionId,
+							sessionFile: resolved.action.path,
+						});
+					}
+
+					// created_new: rebind the runtime to a fresh session with our requested id.
+					const result = await runtimeHost.newSession({
+						parentSession: command.parentSession,
+						setup: async (sessionManager: SessionManager) => {
+							sessionManager.newSession({ id: sessionId, parentSession: command.parentSession });
+						},
+					});
+					if (!result.cancelled) {
+						await rebindSession();
+					}
+					return success(id, "new_session", {
+						cancelled: result.cancelled,
+						sessionId,
+						sessionFile: runtimeHost.session.sessionFile,
+					});
+				}
 				const options = command.parentSession ? { parentSession: command.parentSession } : undefined;
 				const result = await runtimeHost.newSession(options);
 				if (!result.cancelled) {

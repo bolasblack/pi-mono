@@ -136,6 +136,29 @@ describe("parseArgs", () => {
 			expect(result.messages).toEqual([]);
 		});
 
+		test("parses --session-mode continue", () => {
+			const result = parseArgs(["--session-mode", "continue"]);
+			expect(result.sessionMode).toBe("continue");
+		});
+
+		test("parses --session-mode create", () => {
+			const result = parseArgs(["--session-mode", "create"]);
+			expect(result.sessionMode).toBe("create");
+		});
+
+		test("parses --session-mode auto", () => {
+			const result = parseArgs(["--session-mode", "auto"]);
+			expect(result.sessionMode).toBe("auto");
+		});
+
+		test("records error diagnostic for invalid --session-mode", () => {
+			const result = parseArgs(["--session-mode", "invalid"]);
+			expect(result.sessionMode).toBeUndefined();
+			expect(result.diagnostics.some((d) => d.type === "error" && d.message.includes("Invalid session mode"))).toBe(
+				true,
+			);
+		});
+
 		test("parses --export", () => {
 			const result = parseArgs(["--export", "session.jsonl"]);
 			expect(result.export).toBe("session.jsonl");

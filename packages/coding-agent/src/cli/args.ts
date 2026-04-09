@@ -7,7 +7,10 @@ import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.js";
 import type { ExtensionFlag } from "../core/extensions/types.js";
 
+const VALID_SESSION_MODES = ["continue", "create", "auto"] as const;
+
 export type Mode = "text" | "json" | "rpc";
+export type SessionMode = "continue" | "create" | "auto";
 
 export interface Args {
 	provider?: string;
@@ -24,6 +27,7 @@ export interface Args {
 	noSession?: boolean;
 	session?: string;
 	fork?: string;
+	sessionMode?: SessionMode;
 	sessionDir?: string;
 	models?: string[];
 	tools?: string[];
@@ -97,6 +101,16 @@ export function parseArgs(args: string[]): Args {
 			result.session = args[++i];
 		} else if (arg === "--fork" && i + 1 < args.length) {
 			result.fork = args[++i];
+		} else if (arg === "--session-mode" && i + 1 < args.length) {
+			const mode = args[++i];
+			if (mode === "continue" || mode === "create" || mode === "auto") {
+				result.sessionMode = mode;
+			} else {
+				result.diagnostics.push({
+					type: "error",
+					message: `Invalid session mode "${mode}". Valid values: ${VALID_SESSION_MODES.join(", ")}`,
+				});
+			}
 		} else if (arg === "--session-dir" && i + 1 < args.length) {
 			result.sessionDir = args[++i];
 		} else if (arg === "--models" && i + 1 < args.length) {
@@ -225,6 +239,10 @@ ${chalk.bold("Options:")}
   --resume, -r                   Select a session to resume
   --session <path|id>            Use specific session file or partial UUID
   --fork <path|id>               Fork specific session file or partial UUID into a new session
+  --session-mode <mode>           Session ID behavior: continue | create | auto
+                                 continue: open existing, error if not found
+                                 create: create new, error if already exists
+                                 auto: open if exists, create if not
   --session-dir <dir>            Directory for session storage and lookup
   --no-session                   Don't save session (ephemeral)
   --models <patterns>            Comma-separated model patterns for Ctrl+P cycling
@@ -270,6 +288,15 @@ ${chalk.bold("Examples:")}
 
   # Continue previous session
   ${APP_NAME} --continue "What did we discuss?"
+
+  # Open or create a named session
+  ${APP_NAME} --session feature-auth --session-mode auto
+
+  # Create a new named session (fails if it already exists)
+  ${APP_NAME} --session feature-auth --session-mode create
+
+  # Continue a named session (fails if it doesn't exist)
+  ${APP_NAME} --session feature-auth --session-mode continue
 
   # Use different model
   ${APP_NAME} --provider openai --model gpt-4o-mini "Help me refactor this code"

@@ -10,7 +10,8 @@ import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
 import { ProcessTerminal, setKeybindings, TUI } from "@earendil-works/pi-tui";
 import chalk from "chalk";
-import { type Args, type Mode, parseArgs, printHelp } from "./cli/args.js";
+import { existsSync } from "node:fs";
+import { type Args, type Mode, parseArgs, printHelp, type SessionMode } from "./cli/args.js";
 import { processFileArguments } from "./cli/file-processor.js";
 import { buildInitialMessage } from "./cli/initial-message.js";
 import { listModels } from "./cli/list-models.js";
@@ -38,6 +39,7 @@ import {
 	type SessionCwdIssue,
 } from "./core/session-cwd.js";
 import { SessionManager } from "./core/session-manager.js";
+import { resolveSessionForMode } from "./core/session-resolver.js";
 import { SettingsManager } from "./core/settings-manager.js";
 import { printTimings, resetTimings, time } from "./core/timings.js";
 import { runMigrations, showDeprecationWarnings } from "./migrations.js";
@@ -140,13 +142,17 @@ type ResolvedSession =
 	| { type: "global"; path: string; cwd: string } // Found in different project
 	| { type: "not_found"; arg: string }; // Not found anywhere
 
+function isSessionPathLike(sessionArg: string): boolean {
+	return sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl");
+}
+
 /**
  * Resolve a session argument to a file path.
  * If it looks like a path, use as-is. Otherwise try to match as session ID prefix.
  */
 async function resolveSessionPath(sessionArg: string, cwd: string, sessionDir?: string): Promise<ResolvedSession> {
 	// If it looks like a file path, use as-is
-	if (sessionArg.includes("/") || sessionArg.includes("\\") || sessionArg.endsWith(".jsonl")) {
+	if (isSessionPathLike(sessionArg)) {
 		return { type: "path", path: sessionArg };
 	}
 
@@ -169,6 +175,23 @@ async function resolveSessionPath(sessionArg: string, cwd: string, sessionDir?: 
 
 	// Not found anywhere
 	return { type: "not_found", arg: sessionArg };
+}
+
+async function createSessionFromId(
+	sessionId: string,
+	mode: SessionMode,
+	cwd: string,
+	sessionDir?: string,
+): Promise<SessionManager> {
+	const result = await resolveSessionForMode({ sessionId, mode, cwd, sessionDir });
+	if (!result.ok) {
+		console.error(chalk.red(result.error.message));
+		process.exit(1);
+	}
+	if (result.action.type === "opened_existing" && result.action.reusedFromCwd) {
+		console.log(chalk.yellow(`Reusing session from different project: ${result.action.reusedFromCwd}`));
+	}
+	return result.manager;
 }
 
 /** Prompt user for yes/no confirmation */
@@ -237,6 +260,10 @@ async function createSessionManager(
 	}
 
 	if (parsed.session) {
+		if (parsed.sessionMode) {
+			return createSessionFromId(parsed.session, parsed.sessionMode, cwd, sessionDir);
+		}
+
 		const resolved = await resolveSessionPath(parsed.session, cwd, sessionDir);
 
 		switch (resolved.type) {
@@ -456,6 +483,11 @@ export async function main(args: string[], options?: MainOptions) {
 	if (parsed.version) {
 		console.log(VERSION);
 		process.exit(0);
+	}
+
+	if (parsed.sessionMode && !parsed.session) {
+		console.error(chalk.red("--session-mode requires --session <path|id>"));
+		process.exit(1);
 	}
 
 	if (parsed.export) {
